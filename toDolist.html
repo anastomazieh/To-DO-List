@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowBoard Pro</title>
+
+<style>
+:root {
+  --bg: linear-gradient(135deg, #667eea, #764ba2);
+  --glass: rgba(255,255,255,0.12);
+  --card: rgba(255,255,255,0.9);
+  --text: #111;
+}
+
+body.dark {
+  --bg: linear-gradient(135deg, #141e30, #243b55);
+  --glass: rgba(20,20,20,0.4);
+  --card: rgba(40,40,40,0.9);
+  --text: #fff;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+}
+
+input, button {
+  border: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+.board {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  height: calc(100vh - 65px);
+  overflow-x: auto;
+}
+
+.column {
+  flex: 1;
+  min-width: 280px;
+  background: var(--glass);
+  border-radius: 14px;
+  padding: 12px;
+  backdrop-filter: blur(18px);
+}
+
+.column h3 {
+  text-align: center;
+}
+
+.task {
+  background: var(--card);
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  cursor: grab;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+}
+
+.task:active {
+  cursor: grabbing;
+}
+
+.priority {
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-top: 6px;
+}
+
+.low { background: #2ecc71; color: white; }
+.medium { background: #f1c40f; color: white; }
+.high { background: #e74c3c; color: white; }
+
+.actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.actions button {
+  background: transparent;
+  font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🚀 Anas To Do board</h1>
+
+  <div class="controls">
+    <input id="search" placeholder="Search tasks...">
+    <button onclick="openModal()">+ Task</button>
+    <button onclick="toggleDark()">🌙</button>
+  </div>
+</header>
+
+<div class="board">
+
+  <div class="column" id="todo" ondragover="allow(event)" ondrop="drop(event)">
+    <h3>To Do</h3>
+  </div>
+
+  <div class="column" id="doing" ondragover="allow(event)" ondrop="drop(event)">
+    <h3>In Progress</h3>
+  </div>
+
+  <div class="column" id="done" ondragover="allow(event)" ondrop="drop(event)">
+    <h3>Done</h3>
+  </div>
+
+</div>
+
+<dialog id="modal">
+  <h3>Task</h3>
+  <input id="taskText" placeholder="Task title">
+  <select id="priority">
+    <option value="low">Low</option>
+    <option value="medium" selected>Medium</option>
+    <option value="high">High</option>
+  </select>
+
+  <div style="margin-top:10px; text-align:right;">
+    <button onclick="saveTask()">Save</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
+</dialog>
+
+<script>
+/* 🧼 CLEAN OLD DEMO DATA ON FIRST LOAD */
+if (!localStorage.getItem("flowboard_cleaned")) {
+  localStorage.removeItem("tasks");
+  localStorage.setItem("flowboard_cleaned", "true");
+}
+
+let tasks = JSON.parse(localStorage.getItem("tasks") || "[]");
+let editId = null;
+
+/* SAVE */
+function save() {
+  localStorage.setItem("tasks", JSON.stringify(tasks));
+  render();
+}
+
+/* RENDER */
+function render() {
+  ["todo","doing","done"].forEach(c => {
+    document.getElementById(c).innerHTML = `<h3>${c.toUpperCase()}</h3>`;
+  });
+
+  const q = document.getElementById("search").value.toLowerCase();
+
+  tasks
+    .filter(t => t.text.toLowerCase().includes(q))
+    .forEach(t => {
+      const el = document.createElement("div");
+      el.className = "task";
+      el.draggable = true;
+
+      el.innerHTML = `
+        <strong>${t.text}</strong><br>
+        <span class="priority ${t.priority}">${t.priority}</span>
+        <div class="actions">
+          <button onclick="edit('${t.id}')">✏️</button>
+          <button onclick="del('${t.id}')">🗑️</button>
+        </div>
+      `;
+
+      el.ondragstart = e => e.dataTransfer.setData("id", t.id);
+
+      document.getElementById(t.status).appendChild(el);
+    });
+}
+
+render();
+
+/* ADD */
+function openModal() {
+  editId = null;
+  document.getElementById("taskText").value = "";
+  document.getElementById("priority").value = "medium";
+  document.getElementById("modal").showModal();
+}
+
+function saveTask() {
+  const text = document.getElementById("taskText").value.trim();
+  if (!text) return;
+
+  if (editId) {
+    const t = tasks.find(x => x.id === editId);
+    t.text = text;
+    t.priority = document.getElementById("priority").value;
+  } else {
+    tasks.push({
+      id: Date.now().toString(),
+      text,
+      priority: document.getElementById("priority").value,
+      status: "todo"
+    });
+  }
+
+  document.getElementById("modal").close();
+  save();
+}
+
+function closeModal() {
+  document.getElementById("modal").close();
+}
+
+/* EDIT / DELETE */
+function edit(id) {
+  const t = tasks.find(x => x.id === id);
+  editId = id;
+
+  document.getElementById("taskText").value = t.text;
+  document.getElementById("priority").value = t.priority;
+
+  document.getElementById("modal").showModal();
+}
+
+function del(id) {
+  tasks = tasks.filter(t => t.id !== id);
+  save();
+}
+
+/* DRAG */
+function allow(e) { e.preventDefault(); }
+
+function drop(e) {
+  e.preventDefault();
+  const id = e.dataTransfer.getData("id");
+  const t = tasks.find(x => x.id === id);
+  t.status = e.currentTarget.id;
+  save();
+}
+
+/* SEARCH */
+document.getElementById("search").oninput = render;
+
+/* DARK MODE */
+function toggleDark() {
+  document.body.classList.toggle("dark");
+}
+</script>
+
+</body>
+</html>
